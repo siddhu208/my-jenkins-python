@@ -4,7 +4,8 @@ import base64
 
 def __get_jenkins_http_object__(url, username=None, password=None):
     try:
-        url = url+"/"
+        if not url.endswith('/'):
+            url = url+"/"
         h = httplib2.Http(cache=None)
 
         headers = dict()

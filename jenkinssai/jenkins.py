@@ -96,19 +96,23 @@ class jenkins(object):
             raise JenkinsException("Ambiguous arguments: Only one of copyfrom, configxml, configxmlfile should be provided.")
 
         headers_new = self.base_headers.copy()
-        headers_new.update({'Content-Type': 'application/xml'})
+        headers_new.update({"Content-Type": "application/xml; charset=\"UTF-8\""})
+
         def creater(xml):
             try:
-                resp, content = self.http_.request(self.url+"/"+context+"/createItem?name="+name, method="POST",
-                                                   headers=headers_new, body=xml)
+                params = httplib2.urllib.urlencode({'name': name})
+                resp, content = self.http_.request(self.url+"/"+context+"/createItem?"+params, method="POST",
+                                                   headers=headers_new, body=xml.encode('ascii', 'xmlcharrefreplace'))
             except httplib2.HttpLib2Error as e:
                 raise JenkinsException(e.message)
             __check_http_response_error__("POST: "+self.url+"/"+context+"/createItem?name="+name, resp, content)
             return True
 
         if configxmlfile is not None:
-            with open(configxmlfile) as f:
+            #with codecs.open(configxmlfile, 'r', encoding='utf-8') as f:
+            with open(configxmlfile, 'r') as f:
                 creater(f.read())
+
         elif configxml is not None:
             creater(configxml)
         elif copyfrom is not None:

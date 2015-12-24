@@ -15,7 +15,6 @@ class plugins(object):
 
         try:
             params = httplib2.urllib.urlencode({"depth": 1, "xpath": "/*/*/shortName|/*/*/version", "wrapper": "plugins"})
-            ### url_ = "{0}/pluginManager/api/json?depth=1&xpath=/*/*/shortName|/*/*/version&wrapper=plugins".format(self.url)
             url_ = "{0}/pluginManager/api/json?{1}".format(self.url, params)
             resp, content = self.http_.request(url_, method="GET", headers=self.base_headers)
         except httplib2.HttpLib2Error as e:

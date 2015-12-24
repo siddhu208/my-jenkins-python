@@ -4,6 +4,7 @@ import jenkinssai
 import os
 import time
 from yaml import load as yaml_load, YAMLError
+import codecs
 
 def getCredsFromYaml(yaml_file, jenkins_url):
 
@@ -27,14 +28,14 @@ def getCredsFromYaml(yaml_file, jenkins_url):
         print e.message
         exit(2)
 
-def getCreds(yaml_file, jenkins_url, user_opt, pass_opt):
+def getCreds(yaml_file, jenkins_url, user_opt=None, pass_opt=None):
 
     if user_opt is not None and pass_opt is not None:
         return user_opt, pass_opt
     elif user_opt is not None and pass_opt is None:
         pass_opt = os.environ.get('JENKINS_PASSWORD', '')
         if pass_opt == '':
-            pass_opt = click.prompt("Enter Jenkins Password", type=str, hide_input=True)
+            pass_opt = click.prompt("Enter Password for user {0} on jenkins {1}".format(user_opt, jenkins_url), type=str, hide_input=True)
     elif user_opt is None and pass_opt is not None:
         click.echo("ERROR: Password is provided, but no username is found!!")
         click.echo("Check for environment variables if you have not provided the password via command line..")
@@ -45,6 +46,11 @@ def getCreds(yaml_file, jenkins_url, user_opt, pass_opt):
         user_opt, pass_opt = None, None
     return user_opt, pass_opt
 
+def cleanup(dir_name):
+    if os.path.isdir(dir_name):
+        for f in os.listdir(dir_name):
+            os.remove(os.path.join(dir_name, f))
+        os.rmdir(dir_name)
 
 @click.group()
 @click.option('-c', '--jenkins-config', 'yaml_config_file', envvar='JENKINS_CONFIG_YAML_FILE', type=click.File('r'),
@@ -174,7 +180,7 @@ def create(ctx, jenkins, jobname, config, copyfrom, user_opt, pass_opt):
 
 @jobs.command('config')
 @click.pass_context
-@click.argument('jobname', required=False)
+@click.argument('jobname')
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
 @click.option('-o', '--outfile', 'output_fp', type=click.File('wb'), help="path to config.xml file, default: ./config.xml", default="config.xml")
 @click.option('-u', '--user', 'user_opt', envvar="JENKINS_USERNAME",
@@ -212,19 +218,24 @@ def config(ctx, jobname, jenkins, output_fp, user_opt, pass_opt):
 
 @jobs.command('disable-all')
 @click.pass_context
+@click.argument('jobnames', nargs=-1)
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
 @click.option('-u', '--user', 'user_opt', envvar="JENKINS_USERNAME",
               help="Jenkins User Name or set the environment variable JENKINS_USERNAME")
 @click.option('-p', '--password', 'pass_opt', envvar="JENKINS_PASSWORD",
               help="Jenkins Password or set the environment variable JENKINS_PASSWORD. We will prompt for password, if not supplied")
-def disable_all(ctx, jenkins, user_opt, pass_opt):
-    """Disable all jobs at a jenkins url"""
+def disable_all(ctx, jobnames, jenkins, user_opt, pass_opt):
+    """Disable all jobs at a jenkins url.
+    Disables job names that are passed as arguments. If no arguments are passed, all jobs under the jenkins url are disabled."""
 
     user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
 
     try:
         j = jenkinssai.jenkins(jenkins, user_opt, pass_opt)
-        j_jobs = j.get_jobs()
+        if not len(jobnames) == 0:
+            j_jobs = jobnames
+        else:
+            j_jobs = j.get_jobs()
 
         if len(j_jobs) == 0:
             click.echo("No jobs to disable at %s" % jenkins)
@@ -252,19 +263,24 @@ def disable_all(ctx, jenkins, user_opt, pass_opt):
 
 @jobs.command('enable-all')
 @click.pass_context
+@click.argument('jobnames', nargs=-1)
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
 @click.option('-u', '--user', 'user_opt', envvar="JENKINS_USERNAME",
               help="Jenkins User Name or set the environment variable JENKINS_USERNAME")
 @click.option('-p', '--password', 'pass_opt', envvar="JENKINS_PASSWORD",
               help="Jenkins Password or set the environment variable JENKINS_PASSWORD. We will prompt for password, if not supplied")
-def enable_all(ctx, jenkins, user_opt, pass_opt):
-    """Enable all jobs at a jenkins url"""
+def enable_all(ctx, jobnames, jenkins, user_opt, pass_opt):
+    """Enable all jobs at a jenkins url
+    Enabes job names that are passed as arguments. If no arguments are passed, all jobs under the jenkins url are enabled."""
 
     user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
 
     try:
         j = jenkinssai.jenkins(jenkins, user_opt, pass_opt)
-        j_jobs = j.get_jobs()
+        if not len(jobnames) == 0:
+            j_jobs = jobnames
+        else:
+            j_jobs = j.get_jobs()
 
         if len(j_jobs) == 0:
             click.echo("No jobs to enable at %s" % jenkins)
@@ -285,19 +301,24 @@ def enable_all(ctx, jenkins, user_opt, pass_opt):
 
 @jobs.command('delete-all')
 @click.pass_context
+@click.argument('jobnames', nargs=-1)
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
 @click.option('-u', '--user', 'user_opt', envvar="JENKINS_USERNAME",
               help="Jenkins User Name or set the environment variable JENKINS_USERNAME")
 @click.option('-p', '--password', 'pass_opt', envvar="JENKINS_PASSWORD",
               help="Jenkins Password or set the environment variable JENKINS_PASSWORD. We will prompt for password, if not supplied")
-def delete_all(ctx, jenkins, user_opt, pass_opt):
-    """Deletes all jobs under this url. This is irrecoverable. Use with caution."""
+def delete_all(ctx, jobnames, jenkins, user_opt, pass_opt):
+    """Deletes all jobs under this url. This is irrecoverable. Use with caution.
+    Deletes job names that are passed as arguments. If no arguments are passed, all jobs under the jenkins url are deleted."""
 
     user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
 
     try:
         j = jenkinssai.jenkins(jenkins, user_opt, pass_opt)
-        j_jobs = j.get_jobs()
+        if not len(jobnames) == 0:
+            j_jobs = jobnames
+        else:
+            j_jobs = j.get_jobs()
 
         if len(j_jobs) == 0:
             click.echo("No jobs to delete at %s" % jenkins)
@@ -323,7 +344,162 @@ def delete_all(ctx, jenkins, user_opt, pass_opt):
             click.echo("\t "+str(e.message))
     click.echo("")
 
-@basecli.command('plugin')
+@basecli.command("migrate")
+@click.pass_context
+@click.option('-s', '--src', required=True, help="Source Jenkins URL")
+@click.option('-d', '--dest', required=True, help="Destination Jenkins URL")
+@click.option('-D', '--disable', help="Disable newly created jobs or the old jobs. Use src for source url or dest for desination url",
+              type=click.Choice(['src', 'dest', 'all']))
+@click.option('--src-user', 'src_user_opt', help="Jenkins User Name for source jenkins url")
+@click.option('--src-password', 'src_pass_opt', help="Jenkins Password for the source jenkins url. We will prompt for password, if not supplied")
+@click.option('--dest-user', 'dest_user_opt', help="Jenkins User Name for destination jenkins url")
+@click.option('--dest-password', 'dest_pass_opt', help="Jenkins Password for the destination jenkins url. We will prompt for password, if not supplied")
+def migrate(ctx, src, dest, disable, src_user_opt, src_pass_opt, dest_user_opt, dest_pass_opt):
+    """Copy jobs from one jenkins to another and optionally disable jobs on either source or destination jenkins.
+    Takes username and password from the yaml config file if provided or if JENKINS_CONFIG_YAML_FILE environment variable is set."""
+
+    src_user_opt, src_pass_opt = getCreds(ctx.obj['yaml_config_file'], src, src_user_opt, src_pass_opt)
+    dest_user_opt, dest_pass_opt = getCreds(ctx.obj['yaml_config_file'], dest, dest_user_opt, dest_pass_opt)
+
+    click.echo("=== Copying jobs from %s to %s" % (src, dest))
+    try:
+        src_j = jenkinssai.jenkins(src, src_user_opt, src_pass_opt)
+        dest_j = jenkinssai.jenkins(dest, dest_user_opt, dest_pass_opt)
+
+        dir_name = ".jenkinshelper_{0}".format(time.time())
+        os.mkdir(dir_name)
+    except Exception as e:
+        click.echo("ERROR!!")
+        click.echo(e.message)
+        click.echo("")
+        exit(2)
+
+    for job in src_j.get_jobs():
+        click.echo("    === %s" % job)
+        try:
+            config_file_ = "{0}/config_{1}.xml".format(dir_name, job)
+            conf_file = src_j.get_job_config_xml(job, outputfile=config_file_)
+            job_location = dest_j.create_job(job, configxmlfile=conf_file)
+            click.echo("        %s" % job_location)
+            if disable is not None:
+                if disable.lower() == "src" or disable.lower() == 'all':
+                    src_j.disable_job(job)
+                    click.echo("        Job %s disabled on %s" % (job, src))
+                elif disable.lower() == "dest" or disable.lower() == 'all':
+                    dest_j.disable_job(job)
+                    click.echo("        Job %s disabled on %s" % (job, dest))
+        except Exception as e:
+            print "    ERROR: ",
+            print e.message
+
+    cleanup(dir_name)
+
+@basecli.command('release-copy')
+@click.pass_context
+@click.option('-s', '--src', required=True, help="Source Jenkins URL (full url to the view)")
+@click.option('-d', '--dest', required=True, help="Destination Jenkins URL (full url to the view)")
+@click.option('-T', '--name-translate', 'job_name_translator', type=(str, str), multiple=False, required=True,
+              help="Translation for job name, Format is <src> <dest>. All occurances of <src> will be replaced with <dest>. Make sure that the job name has the <src> string")
+@click.option('-t', '--translate', 'translations', type=(str, str), multiple=True,
+    help="Translation for new job. Format is <src> <dest>. All occurances of <src> will be replaced with <dest>. Make sure that the job name has the <src> string")
+@click.option('-D', '--disable',
+    help="Disable jobs. Disables jobs from source jenkins url if src, if dest disables jobs from dest url, if all, disables jobs from both src and dest jenkins urls",
+    type=click.Choice(['src', 'dest', 'all']))
+def release_copy(ctx, src, dest, job_name_translator, translations, disable):
+    """Copy jobs from one view to another. As there can not be two jobs in the same view, translate parameters are needed.
+    Two arguments are passed to option -T/--name-translate, like -T src dest; all occurances of src in the job name will be replaced
+    with the value of dest and will be used as the new job name."""
+
+    click.echo("=== Copying jobs from %s to %s" % (src, dest))
+
+    src_user_opt, src_pass_opt = getCreds(ctx.obj['yaml_config_file'], src)
+    dest_user_opt, dest_pass_opt = getCreds(ctx.obj['yaml_config_file'], dest)
+
+    dir_name = str()
+    done_flag = False
+
+    try:
+        src_j = jenkinssai.jenkins(src, src_user_opt, src_pass_opt)
+        jobs_list = src_j.get_jobs()
+
+        if len(jobs_list) == 0:
+            click.echo("\tNo Jobs at %s" % src)
+            done_flag = True
+        elif not all([(job_name_translator[0] in x) for x in jobs_list]):
+            ignore_jobs_list = [x for x in jobs_list if job_name_translator[0] not in x]
+            jobs_list = [x for x in jobs_list if job_name_translator[0] in x]
+
+            click.echo("\tFollowing Jobs do not have the string '%s' in them:" % job_name_translator[0])
+            click.echo('\t'+'\n\t'.join(ignore_jobs_list))
+
+            click.echo("\n\n")
+            click.echo("\tOnly following Jobs will be copied to new jenkins:")
+            click.echo('\t'+'\n\t'.join(jobs_list))
+            if not click.confirm('Do you want to continue?'):
+                click.echo('Aborting..')
+                done_flag = True
+    except Exception as e:
+        click.echo("\tError: %s\n %s" % (e.message, '\n\n'.join([str(x) for x in e.args])))
+        done_flag = True
+
+    if done_flag:
+        cleanup(dir_name)
+        exit(2)
+
+    try:
+        dest_j = jenkinssai.jenkins(dest, dest_user_opt, dest_pass_opt)
+        dir_name = ".jenkinshelper_{0}".format(time.time())
+        os.mkdir(dir_name)
+    except Exception as e:
+
+        click.echo("\tERROR: %s\n %s" % (e.message, '\n\n'.join([str(x) for x in e.args])))
+        cleanup(dir_name)
+        exit(2)
+
+    for job in jobs_list:
+        click.echo("   === %s" % job)
+        try:
+            config_file_ = "{0}/config_{1}.xml".format(dir_name, job)
+            conf_file = src_j.get_job_config_xml(job, outputfile=config_file_)
+
+            ## Update the file with the tokens
+            with codecs.open(conf_file, 'r', encoding='utf8') as in_file:
+                content = in_file.read()
+
+            for rep_values in translations:
+                rep_values_new = [x.encode('utf8') for x in rep_values]
+                content = content.replace(*rep_values_new)
+
+            with codecs.open(conf_file, 'w', encoding='utf8') as out_file:
+                out_file.write(content)
+
+            new_job_name = job.replace(*job_name_translator)
+
+            job_location = dest_j.create_job(new_job_name, configxmlfile=conf_file)
+
+            click.echo("\tNew job: %s" % job_location)
+
+            if disable is not None:
+                if disable.lower() in ["src", "all"]:
+                    src_j.disable_job(job)
+                    click.echo("\tJob %s disabled on %s" % (job, src))
+                elif disable.lower() in ["dest", "all"]:
+                    dest_j.disable_job(new_job_name)
+                    click.echo("\tJob %s disabled on %s" % (job, dest))
+
+        except Exception as e:
+            click.echo("\tERROR: %s\n %s" % (e.message, '\n\n'.join([str(x) for x in e.args])))
+
+    cleanup(dir_name)
+    click.echo('')
+
+
+@basecli.group()
+@click.pass_context
+def plugins(ctx):
+    """Manages Plugins"""
+
+@plugins.command('list')
 @click.pass_context
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
 @click.option('--noversions', is_flag=True, help="Do not show versions")
@@ -371,65 +547,54 @@ def list(ctx, jenkins, noversions, json_opt, shell_opt, user_opt, pass_opt):
         click.echo("ERROR: "+str(e.message))
     click.echo("")
 
-@basecli.command("migrate")
+@plugins.command('compare')
 @click.pass_context
-@click.option('-s', '--src', required=True, help="Source Jenkins URL")
-@click.option('-d', '--dest', required=True, help="Destination Jenkins URL")
-@click.option('-D', '--disable', help="Disable newly created jobs or the old jobs. Use src for source url or dest for desination url")
-@click.option('--src-user', 'src_user_opt', help="Jenkins User Name for source jenkins url")
-@click.option('--src-password', 'src_pass_opt', help="Jenkins Password for the source jenkins url. We will prompt for password, if not supplied")
-@click.option('--dest-user', 'dest_user_opt', help="Jenkins User Name for destination jenkins url")
-@click.option('--dest-password', 'dest_pass_opt', help="Jenkins Password for the destination jenkins url. We will prompt for password, if not supplied")
-def migrate(ctx, src, dest, disable, src_user_opt, src_pass_opt, dest_user_opt, dest_pass_opt):
-    """Copy jobs from one jenkins to another and optionally disable jobs on either source or destination jenkins"""
+@click.argument('jenkinsurl', nargs=-1, required=True)
+@click.option('--noversions', is_flag=True, help="Do not show versions")
+@click.option('-j', '--json', 'json_opt', is_flag=True, help="Output in JSON")
+@click.option('-s', '--shell', 'shell_opt', is_flag=True, help="Shell friendly output")
+def compare(ctx, jenkinsurl, noversions, json_opt, shell_opt, user_opt, pass_opt):
+    """List installed plugins on the jenkins along with their versions"""
 
-    if src_user_opt is not None and src_pass_opt is None:
-        src_pass_opt = click.prompt("Enter Jenkins Password for user %s on jenkins %s" % (src_user_opt, src), type=str, hide_input=True)
+    if len(jenkinsurl) < 2:
+        click.echo("Atlease two jenkins URLs must be provided for comparision.")
+        exit(2)
 
-    if dest_user_opt is not None and dest_pass_opt is None:
-        dest_pass_opt = click.prompt("Enter Jenkins Password for user %s on jenkins %s" % (dest_user_opt, dest), type=str, hide_input=True)
+    user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
 
-    if disable is not None and disable.lower() != "src" and disable.lower() != "dest":
-            click.echo("ERROR: Only 'src' or 'dest' values are allowed for 'disable' argument. Full jenkins urls are not allowed for safety.")
-            click.echo("")
-            exit(2)
-
-    click.echo("=== Copying jobs from %s to %s" % (src, dest))
-    try:
-        src_j = jenkinssai.jenkins(src, src_user_opt, src_pass_opt)
-        dest_j = jenkinssai.jenkins(dest, dest_user_opt, dest_pass_opt)
-
-        dir_name = ".jenkinshelper_{0}".format(time.time())
-        os.mkdir(dir_name)
-    except Exception as e:
+    if json_opt and shell_opt:
         click.echo("ERROR!!")
-        click.echo(e.message)
+        click.echo("Ambiguous flags. shell and json flags can not be used together!!")
         click.echo("")
         exit(2)
 
-    for job in src_j.get_jobs():
-        click.echo("    === %s" % job)
-        try:
-            config_file_ = "{0}/config_{1}.xml".format(dir_name, job)
-            conf_file = src_j.get_job_config_xml(job, outputfile=config_file_)
-            job_location = dest_j.create_job(job, configxmlfile=conf_file)
-            click.echo("        %s" % job_location)
-            if disable is not None:
-                if disable.lower() == "src":
-                    src_j.disable_job(job)
-                    click.echo("        Job %s disabled on %s" % (job, src))
-                elif disable.lower() == "dest":
-                    dest_j.disable_job(job)
-                    click.echo("        Job %s disabled on %s" % (job, dest))
-        except Exception as e:
-            print "    ERROR: ",
-            print e.message
+    if not (shell_opt or json_opt):   click.echo("=== Installed Plugins in jenkins %s" % jenkins)
+    try:
+        j = jenkinssai.plugins(jenkins, user_opt, pass_opt)
+        plugins = j.list_installed()
+        if noversions:
+            plugins = plugins.keys()
 
-    if os.path.isdir(dir_name):
-        for f in os.listdir(dir_name):
-            os.remove(os.path.join(dir_name, f))
-        os.rmdir(dir_name)
+        if json_opt:
+            print dumps(plugins, indent=4)
+        elif shell_opt:
+            if noversions:
+                click.echo('\n'.join(plugins))
+            else:
+                for plugin, version in plugins.items():
+                    click.echo("%s=%s" % (plugin, version))
+        else:
+            if noversions:
+                print "\t",
+                click.echo("\n\t".join(plugins))
+            else:
+                max_key_length = max(len(i) for i in plugins.keys())
+                for plugin, version in plugins.items():
+                    click.echo(plugin.ljust(max_key_length)+" : "+version)
+    except Exception as e:
+        click.echo("ERROR: "+str(e.message))
     click.echo("")
+
 
 if __name__ == '__main__':
     basecli(obj={})
