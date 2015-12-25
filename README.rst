@@ -5,9 +5,8 @@ To use (with caution), simply do::
     >>> import jenkinsai
     >>> dir(jenkinssai)
 
-</br></br>
-I have also included a cli for jenkins. To use, run jenkins_siddhu.py.</br>
-Run with --help to see all options.</br>
+I have also included a cli for jenkins. To use, run jenkins_siddhu.py.
+Run with --help to see all options.
 
 $ python jenkins_siddhu.py
 Usage: jenkins_siddhu.py [OPTIONS] COMMAND [ARGS]...
