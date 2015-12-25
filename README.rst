@@ -21,10 +21,10 @@ $ python jenkins_siddhu.py
     
     YAML file should look like this:
     jenkinsurl.mycompany.com:
-        user: m320921
+        user: siddhu
         pass: apikeyORpassword
     172.17.0.159:
-        user: m320921
+        user: sai
         pass: apikeyORpassword
     etc...
     where jenkinsurl is http://jenkinsurl.mycompany.com:8080/jenkins. The main key has to be the hostname of jenkins.
