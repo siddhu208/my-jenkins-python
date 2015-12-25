@@ -5,13 +5,17 @@ import os
 import time
 from yaml import load as yaml_load, YAMLError
 import codecs
+from prettytable import PrettyTable
+
+def __getJenkinsHostFromURL__(*urls):
+    return [jenkins_url.split('http://')[-1].split('https://')[-1].split('www')[-1].split('/')[0].split(':')[0] for jenkins_url in urls]
 
 def getCredsFromYaml(yaml_file, jenkins_url):
 
     try:
         with open(yaml_file) as f:
             conf = yaml_load(f)
-            jenkins_host = jenkins_url.split('http://')[-1].split('https://')[-1].split('/')[0].split(':')[0]
+            jenkins_host = __getJenkinsHostFromURL__(jenkins_url)[0]
             if conf.has_key(jenkins_host):
                 return (conf[jenkins_host]['user'], conf[jenkins_host]['pass'])
 
@@ -103,7 +107,7 @@ def jobs(ctx):
               help="Jenkins User Name or set the environment variable JENKINS_USERNAME")
 @click.option('-p', '--password', 'pass_opt', envvar="JENKINS_PASSWORD",
               help="Jenkins Password or set the environment variable JENKINS_PASSWORD. We will prompt for password, if not supplied")
-def list(ctx, jenkins, json_opt, shell_opt, user_opt, pass_opt):
+def list_jobs(ctx, jenkins, json_opt, shell_opt, user_opt, pass_opt):
     """Lists jobs for the jenkins url provided"""
 
     user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
@@ -329,10 +333,10 @@ def delete_all(ctx, jobnames, jenkins, user_opt, pass_opt):
         click.echo("")
         exit(2)
 
-    click.echo("WARNING!!")
-    click.echo("Destructive action. CAN NOT be reverted..")
+    click.echo("\nWARNING!!")
+    click.echo("Destructive action. CAN NOT be reverted..\n")
     click.echo("Following jobs on %s will be deleted:" % jenkins)
-    click.echo('\n'.join(j_jobs))
+    click.echo('\t'+'\n\t'.join(j_jobs))
     click.confirm('Do you want to continue?', abort=True)
 
     for job in j_jobs:
@@ -356,7 +360,8 @@ def delete_all(ctx, jobnames, jenkins, user_opt, pass_opt):
 @click.option('--dest-password', 'dest_pass_opt', help="Jenkins Password for the destination jenkins url. We will prompt for password, if not supplied")
 def migrate(ctx, src, dest, disable, src_user_opt, src_pass_opt, dest_user_opt, dest_pass_opt):
     """Copy jobs from one jenkins to another and optionally disable jobs on either source or destination jenkins.
-    Takes username and password from the yaml config file if provided or if JENKINS_CONFIG_YAML_FILE environment variable is set."""
+    Takes username and password from the yaml config file if provided or if JENKINS_CONFIG_YAML_FILE environment variable is set.
+    see release-copy if you would like to move jobs in the same jenkins"""
 
     src_user_opt, src_pass_opt = getCreds(ctx.obj['yaml_config_file'], src, src_user_opt, src_pass_opt)
     dest_user_opt, dest_pass_opt = getCreds(ctx.obj['yaml_config_file'], dest, dest_user_opt, dest_pass_opt)
@@ -406,7 +411,7 @@ def migrate(ctx, src, dest, disable, src_user_opt, src_pass_opt, dest_user_opt, 
     help="Disable jobs. Disables jobs from source jenkins url if src, if dest disables jobs from dest url, if all, disables jobs from both src and dest jenkins urls",
     type=click.Choice(['src', 'dest', 'all']))
 def release_copy(ctx, src, dest, job_name_translator, translations, disable):
-    """Copy jobs from one view to another. As there can not be two jobs in the same view, translate parameters are needed.
+    """Copy jobs from one view to another, may be from one jenkins to another also. As there can not be two jobs in the same view, translate parameters are needed.
     Two arguments are passed to option -T/--name-translate, like -T src dest; all occurances of src in the job name will be replaced
     with the value of dest and will be used as the new job name."""
 
@@ -499,17 +504,55 @@ def release_copy(ctx, src, dest, job_name_translator, translations, disable):
 def plugins(ctx):
     """Manages Plugins"""
 
+def __plugin_compares__(jenkinsurls=(), noversions=False, configFile=None):
+    jenkins_hosts = dict()
+    plugins_all = set()
+
+    for jenkins_url in jenkinsurls:
+        h = __getJenkinsHostFromURL__(jenkins_url)[0]
+
+        if jenkins_hosts.has_key(h):
+            continue
+
+        jenkins_hosts[h] = dict()
+        jenkins_hosts[h]['url'] = jenkins_url
+
+        try:
+            j = jenkinssai.plugins(jenkins_hosts[h]['url'],
+                                   *getCreds(configFile, jenkins_url, user_opt=None, pass_opt=None))
+            jenkins_hosts[h]['plugins'] = j.list_installed()
+            plugins_all.update(jenkins_hosts[h]['plugins'].keys())
+        except Exception as e:
+            click.echo("ERROR: "+str(e.message))
+            exit(2)
+
+    output = dict()
+    for plugin_ in plugins_all:
+        output[plugin_] = dict()
+        for host, pinfo in jenkins_hosts.items():
+            output[plugin_][host] = dict()
+            ## output[plugin_][host]['url'] = pinfo['url']
+            output[plugin_][host]['exists'] = pinfo['plugins'].has_key(plugin_)
+
+            if not noversions:
+                if output[plugin_][host]['exists']:
+                    output[plugin_][host]['plugin_version'] = pinfo['plugins'][plugin_]
+                else:
+                    output[plugin_][host]['plugin_version'] = "Not Found"
+
+    return output
+
 @plugins.command('list')
 @click.pass_context
 @click.option('-J', '--jenkins', required=True, help="Jenkins URL or set environment variable JENKINS_URL", envvar="JENKINS_URL")
-@click.option('--noversions', is_flag=True, help="Do not show versions")
+@click.option('--names-only', 'noversions', is_flag=True, help="Do not show versions")
 @click.option('-j', '--json', 'json_opt', is_flag=True, help="Output in JSON")
 @click.option('-s', '--shell', 'shell_opt', is_flag=True, help="Shell friendly output")
 @click.option('-u', '--user', 'user_opt', envvar="JENKINS_USERNAME",
               help="Jenkins User Name or set the environment variable JENKINS_USERNAME")
 @click.option('-p', '--password', 'pass_opt', envvar="JENKINS_PASSWORD",
               help="Jenkins Password or set the environment variable JENKINS_PASSWORD. We will prompt for password, if not supplied")
-def list(ctx, jenkins, noversions, json_opt, shell_opt, user_opt, pass_opt):
+def list_plugins(ctx, jenkins, noversions, json_opt, shell_opt, user_opt, pass_opt):
     """List installed plugins on the jenkins along with their versions"""
 
     user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
@@ -549,52 +592,54 @@ def list(ctx, jenkins, noversions, json_opt, shell_opt, user_opt, pass_opt):
 
 @plugins.command('compare')
 @click.pass_context
-@click.argument('jenkinsurl', nargs=-1, required=True)
-@click.option('--noversions', is_flag=True, help="Do not show versions")
+@click.argument('jenkinsurls', nargs=-1, required=True)
+@click.option('--names-only', 'noversions', is_flag=True, help="Do not show versions")
 @click.option('-j', '--json', 'json_opt', is_flag=True, help="Output in JSON")
 @click.option('-s', '--shell', 'shell_opt', is_flag=True, help="Shell friendly output")
-def compare(ctx, jenkinsurl, noversions, json_opt, shell_opt, user_opt, pass_opt):
+@click.option('-p', '--pretty-print', 'pretty_print', is_flag=True,
+              help="Pretty prints output. Because of the screen sizes, the output may not be as pretty as expected. Works well with two jenkins.")
+def compare(ctx, jenkinsurls, noversions, json_opt, shell_opt, pretty_print):
     """List installed plugins on the jenkins along with their versions"""
 
-    if len(jenkinsurl) < 2:
-        click.echo("Atlease two jenkins URLs must be provided for comparision.")
+    if len(jenkinsurls) < 2:
+        click.echo("Atleast two jenkins URLs must be provided for comparison.")
         exit(2)
 
-    user_opt, pass_opt = getCreds(ctx.obj['yaml_config_file'], jenkins, user_opt, pass_opt)
-
-    if json_opt and shell_opt:
+    if [json_opt, shell_opt, pretty_print].count(True) > 1:
         click.echo("ERROR!!")
-        click.echo("Ambiguous flags. shell and json flags can not be used together!!")
+        click.echo("Ambiguous flags. Only one of shell/json/pretty-print may be used!!")
         click.echo("")
         exit(2)
 
-    if not (shell_opt or json_opt):   click.echo("=== Installed Plugins in jenkins %s" % jenkins)
-    try:
-        j = jenkinssai.plugins(jenkins, user_opt, pass_opt)
-        plugins = j.list_installed()
-        if noversions:
-            plugins = plugins.keys()
+    plugins = __plugin_compares__(jenkinsurls, noversions, ctx.obj['yaml_config_file'])
+    jenkins_hosts = __getJenkinsHostFromURL__(*jenkinsurls)
 
-        if json_opt:
-            print dumps(plugins, indent=4)
-        elif shell_opt:
-            if noversions:
-                click.echo('\n'.join(plugins))
-            else:
-                for plugin, version in plugins.items():
-                    click.echo("%s=%s" % (plugin, version))
-        else:
-            if noversions:
-                print "\t",
-                click.echo("\n\t".join(plugins))
-            else:
-                max_key_length = max(len(i) for i in plugins.keys())
-                for plugin, version in plugins.items():
-                    click.echo(plugin.ljust(max_key_length)+" : "+version)
-    except Exception as e:
-        click.echo("ERROR: "+str(e.message))
-    click.echo("")
+    if json_opt:
+        click.echo(dumps(plugins, indent=4))
+    elif shell_opt:
+        for plugin_name, plugin_info in plugins.items():
+            click.echo(plugin_name+":", nl=False)
+            click.echo(';'.join(
+                ["%s-->%s" % (host, (plugin_info[host]['exists']) if noversions else plugin_info[host]['plugin_version']) for host in jenkins_hosts]
+                )
+            )
+    elif pretty_print:
+        out_table = PrettyTable(['Plugin']+jenkins_hosts)
+        out_table.align = 'l'
 
+        for plugin_name, plugin_info in plugins.items():
+            out_table.add_row([plugin_name]+[plugin_info[host]['exists'] if noversions else plugin_info[host]['plugin_version'] for host in jenkins_hosts])
+        print out_table
+    else:
+        click.echo("Comparing plugins for ", nl=False)
+        click.echo(' '.join(jenkins_hosts))
+        for plugin_name, plugin_info in plugins.items():
+            click.echo("=== %s:" % plugin_name)
+            for host in jenkins_hosts:
+                click.echo("\t%s: %s" % (host, (plugin_info[host]['exists']) if noversions else plugin_info[host]['plugin_version']))
+
+    if not (shell_opt or json_opt):
+        click.echo()
 
 if __name__ == '__main__':
     basecli(obj={})
