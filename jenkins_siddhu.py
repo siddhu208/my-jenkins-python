@@ -390,7 +390,7 @@ def migrate(ctx, src, dest, disable, src_user_opt, src_pass_opt, dest_user_opt, 
                 if disable.lower() == "src" or disable.lower() == 'all':
                     src_j.disable_job(job)
                     click.echo("        Job %s disabled on %s" % (job, src))
-                elif disable.lower() == "dest" or disable.lower() == 'all':
+                if disable.lower() == "dest" or disable.lower() == 'all':
                     dest_j.disable_job(job)
                     click.echo("        Job %s disabled on %s" % (job, dest))
         except Exception as e:
@@ -488,7 +488,7 @@ def release_copy(ctx, src, dest, job_name_translator, translations, disable):
                 if disable.lower() in ["src", "all"]:
                     src_j.disable_job(job)
                     click.echo("\tJob %s disabled on %s" % (job, src))
-                elif disable.lower() in ["dest", "all"]:
+                if disable.lower() in ["dest", "all"]:
                     dest_j.disable_job(new_job_name)
                     click.echo("\tJob %s disabled on %s" % (job, dest))
 
