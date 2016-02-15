@@ -1,0 +1,33 @@
+fbd-jenkins-master.devops.fds.com:
+  user:  m320921
+  pass:  3fe69e6c7e5d58b1721053bacc86a4f5
+mdc2vr1188:
+  user:  m320921
+  pass:  64bcca8a40f928382e0140aae5bee6fc
+platform-build:
+  user:  m320921
+  pass:  0c81c1780aa7623c7847186da0b31dfe
+ci-legacy-lo.cistages.fds:
+  user:  m320921
+  pass:  f7217e5fcaa491c81064b6c50672dab2
+11.120.148.92:
+  user: m320921
+  pass: cc838b845d467e80b2aa06aad98d07d0
+mdc2vr5028:
+  user: m320921
+  pass: 8ffdfdfec0b418ba7dbf97aa95fcd331
+ci-sandbox.devops.fds.com:
+  user: m320921
+  pass: 5920ea625c7497a31613e875ba8ca704
+web-ci.devops.fds.com:
+  user: m320921
+  pass: b1a7e88af4d0115a9c52e2b75d023076
+platform-ci.devops.fds.com:
+  user: m320921
+  pass: c4b44cc2292b36442880f3cd4d70bff8
+172.17.0.159:
+  user: m320921
+  pass: 5920ea625c7497a31613e875ba8ca704
+buildserver:
+  user: m320921
+  pass: 145ca59868f2a3320a7be75752056233
